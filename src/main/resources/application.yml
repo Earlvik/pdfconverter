@@ -1,0 +1,12 @@
+pdf-converter:
+  default-flavor: PDFA_1B
+  render-dpi: 300
+  timeout-seconds: 120
+  validate-after-conversion: true
+  max-validation-failures-reported: 50
+
+logging:
+  level:
+    com.pdfconverter: INFO
+    org.apache.pdfbox: WARN
+    org.verapdf: WARN
