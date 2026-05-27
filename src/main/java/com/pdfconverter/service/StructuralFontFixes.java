@@ -121,6 +121,8 @@ final class StructuralFontFixes {
                 PDFont font = resources.getFont(fontName);
                 if (font != null && !font.isEmbedded()) {
                     resources.put(fontName, fallback);
+                } else if (font != null) {
+                    ensureCharSetForType1(font);
                 }
             } catch (IOException e) {
                 log.warn("Could not load font {} for embedding check (non-critical, skipping slot): {}", fontName, e.getMessage());
@@ -264,6 +266,55 @@ final class StructuralFontFixes {
             fd.setCIDSet(cidSetStream);
         } catch (Exception e) {
             log.warn("Could not add CIDSet stream (non-critical; VeraPDF may still fail §6.3.5): {}", e.getMessage());
+        }
+    }
+
+    private void ensureCharSetForType1(PDFont font) {
+        try {
+            PDFontDescriptor fd = font.getFontDescriptor();
+            if (fd == null || fd.getCharSet() != null || !font.isEmbedded() || font.getName() == null || !font.getName().contains("+")) {
+                return;
+            }
+
+            if (font instanceof org.apache.pdfbox.pdmodel.font.PDType1CFont t1c) {
+                org.apache.fontbox.cff.CFFType1Font cff = t1c.getCFFType1Font();
+                if (cff == null) return;
+                Object charset = cff.getClass().getMethod("getCharset").invoke(cff);
+                int numGlyphs = cff.getCharStringBytes().size();
+
+                java.lang.reflect.Method getNameForGID = null;
+                Class<?> clazz = charset.getClass();
+                while (clazz != null) {
+                    try {
+                        getNameForGID = clazz.getDeclaredMethod("getNameForGID", int.class);
+                        break;
+                    } catch (NoSuchMethodException e) {
+                        clazz = clazz.getSuperclass();
+                    }
+                }
+                if (getNameForGID != null) {
+                    getNameForGID.setAccessible(true);
+                    StringBuilder sb = new StringBuilder();
+                    for (int i = 0; i < numGlyphs; i++) {
+                        String n = (String) getNameForGID.invoke(charset, i);
+                        if (n != null && !n.equals(".notdef")) {
+                            sb.append('/').append(n);
+                        }
+                    }
+                    if (!sb.isEmpty()) fd.getCOSObject().setString(COSName.CHAR_SET, sb.toString());
+                }
+            } else if (font instanceof org.apache.pdfbox.pdmodel.font.PDType1Font type1) {
+                org.apache.fontbox.type1.Type1Font t1 = type1.getType1Font();
+                if (t1 != null) {
+                    StringBuilder sb = new StringBuilder();
+                    for (String n : t1.getCharStringsDict().keySet()) {
+                        if (!n.equals(".notdef")) sb.append('/').append(n);
+                    }
+                    if (!sb.isEmpty()) fd.getCOSObject().setString(COSName.CHAR_SET, sb.toString());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Could not inject CharSet for Type 1 subset {}: {}", font.getName(), e.getMessage());
         }
     }
 }

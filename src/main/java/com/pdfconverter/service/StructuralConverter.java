@@ -47,6 +47,7 @@ public class StructuralConverter {
     private final StructuralTransparencyStripper transparencyStripper = new StructuralTransparencyStripper();
     private final StructuralFontFixes fontFixes = new StructuralFontFixes();
     private final StructuralStreamSanitizer streamSanitizer = new StructuralStreamSanitizer();
+    private final StructuralDefaultColorSpaces defaultColorSpaces = new StructuralDefaultColorSpaces();
 
     /**
      * Applies PDF/A-1b structural fixes.
@@ -75,6 +76,7 @@ public class StructuralConverter {
 
             // Colour: normalize ICC profile streams; then single OutputIntent (sRGB vs CMYK)
             iccRepair.fixIccBasedStreams(doc);
+            defaultColorSpaces.addDefaultColorSpaces(doc);
             outputIntent.add(doc, warnings);
 
             // Interactive and transparency rules
